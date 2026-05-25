@@ -1,6 +1,8 @@
 logs/
 node_modules/
 dist/
+.vite/
 __pycache__/
 *.pyc
+*.egg-info/
 .env

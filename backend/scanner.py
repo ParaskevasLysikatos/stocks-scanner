@@ -144,6 +144,13 @@ async def run_scan() -> AsyncGenerator[dict, None]:
     for rank, ticker in enumerate(top10, 1):
         s = all_scores[ticker]
         info = await asyncio.to_thread(_get_ticker_info, ticker)
+
+        current_price = info.get("currentPrice") or info.get("regularMarketPrice")
+        target_price = info.get("targetMeanPrice")
+        upside_pct = None
+        if target_price and current_price:
+            upside_pct = round(((target_price / current_price) - 1) * 100, 1)
+
         results.append({
             "rank": rank,
             "ticker": ticker,
@@ -154,6 +161,15 @@ async def run_scan() -> AsyncGenerator[dict, None]:
             "volume_score": round(s["volume"] * 25, 1),
             "sentiment_score": round(s.get("sentiment", 0) * 25, 1),
             "fundamentals_score": round(s.get("fundamentals", 0) * 15, 1),
+            "current_price": current_price,
+            "target_price": target_price,
+            "target_low": info.get("targetLowPrice"),
+            "target_high": info.get("targetHighPrice"),
+            "week52_low": info.get("fiftyTwoWeekLow"),
+            "week52_high": info.get("fiftyTwoWeekHigh"),
+            "upside_pct": upside_pct,
+            "recommendation": info.get("recommendationKey", "N/A"),
+            "num_analysts": info.get("numberOfAnalystOpinions", 0),
             "notes": _build_notes(s, info),
         })
 
@@ -211,6 +227,25 @@ def _build_notes(scores: dict, info: dict) -> str:
         notes.append("Positive sentiment")
     if scores.get("fundamentals", 0) > 0.5:
         notes.append("Earnings catalyst")
+
+    # Bargain indicators from price data
+    current = info.get("currentPrice") or info.get("regularMarketPrice")
+    low52 = info.get("fiftyTwoWeekLow")
+    target = info.get("targetMeanPrice")
+    rec = info.get("recommendationKey", "")
+
+    if current and low52 and low52 > 0:
+        if current <= low52 * 1.10:
+            notes.append("Near 52W low")
+
+    if current and target and current > 0:
+        upside = ((target / current) - 1) * 100
+        if upside >= 20:
+            notes.append(f"Analyst upside +{upside:.0f}%")
+
+    if rec in ("strong_buy", "buy"):
+        notes.append("Analyst Buy")
+
     return "; ".join(notes) if notes else "Moderate signals"
 
 
