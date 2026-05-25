@@ -1,0 +1,18 @@
+services:
+  backend:
+    build: ./backend
+    container_name: stock-scanner-backend
+    expose:
+      - "8000"
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: stock-scanner-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
