@@ -1,6 +1,6 @@
 # Stock Speculation Scanner
 
-A web-based tool that scans ~2,700 US stocks (S&P 500 + NASDAQ 100 + Russell 2000) and identifies the **top 10 most likely short-term gainers** based on a composite scoring system, with price targets and analyst ratings.
+A web-based tool that scans ~2,700 US stocks (S&P 500 + NASDAQ 100 + Russell 2000) and identifies the **most likely short-term gainers** based on a composite scoring system, with price targets, analyst ratings, and adjustable filters.
 
 > **DISCLAIMER:** This is an educational/research tool. It does NOT constitute financial advice. All signals are speculative. Always do your own due diligence before making any investment decisions.
 
@@ -15,12 +15,13 @@ Scores each stock 0–100 using four signals:
 | Sentiment | 25% | News + Reddit buzz via TextBlob polarity |
 | Fundamentals | 15% | P/E < 40, earnings within 7 days (catalyst) |
 
-Returns the top 10 highest-scoring stocks with:
+Returns up to 50 highest-scoring stocks with:
 - **Composite score** and per-signal breakdowns
 - **Current price** and **52-week range** (visual position indicator)
 - **Analyst price target** with upside/downside percentage
 - **Analyst consensus rating** (Strong Buy / Buy / Hold / Sell)
 - **Smart notes**: Near 52W low, Analyst upside %, Analyst Buy consensus, volume spikes, earnings catalysts
+- **Client-side filters** to narrow results instantly without re-scanning
 
 ## Prerequisites
 
@@ -30,11 +31,27 @@ No API keys, no database, no accounts needed. All data sources are free.
 
 ## How to Run
 
+**First time or after code changes:**
 ```bash
-docker-compose up --build
+docker-compose down
+docker rmi stock-scanner-frontend stock-scanner-backend
+docker-compose build --no-cache
+docker-compose up -d
+```
+
+**Normal startup (no code changes):**
+```bash
+docker-compose up -d
+```
+
+**Stop:**
+```bash
+docker-compose down
 ```
 
 Then open **http://localhost** in your browser.
+
+> **Note:** If you see stale results after code changes, make sure to use the full rebuild sequence above. Docker aggressively caches frontend builds.
 
 ## How to Use
 
@@ -44,6 +61,8 @@ Then open **http://localhost** in your browser.
 4. Adjust filters to narrow or broaden results (no re-scan needed)
 
 **Recommended usage:** Once daily, before US market open (09:30 ET).
+
+Old log files are automatically cleared at the start of each new scan.
 
 ## Filters
 
@@ -64,7 +83,7 @@ The backend sends up to 50 top-scoring results. Filters are applied instantly in
 | Score | Composite 0–100 score across all signals |
 | Price | Current stock price |
 | 52W Range | 52-week low — high with dot showing current price position |
-| Target | Mean analyst price target with upside % |
+| Target | Mean analyst price target with upside % and analyst count |
 | Rating | Analyst consensus: Strong Buy, Buy, Hold, Sell |
 | Technical | Technical signal score (out of 35) |
 | Volume | Volume spike score (out of 25) |
@@ -94,7 +113,7 @@ stock-scanner/
 ├── backend/
 │   ├── Dockerfile
 │   ├── main.py                # FastAPI app: POST /api/scan, GET /api/health, GET /api/logs
-│   ├── scanner.py             # Scan orchestrator: batch download → score → top 10
+│   ├── scanner.py             # Scan orchestrator: batch download → score → top 50
 │   ├── universe.py            # Ticker universe: S&P500 + NASDAQ100 + Russell2000
 │   ├── logger.py              # Rotating file + console logging
 │   ├── request_tracker.py     # External request audit log (JSON-lines)
@@ -106,17 +125,19 @@ stock-scanner/
 │       └── fundamentals.py    # P/E ratio + earnings catalyst
 ├── frontend/
 │   ├── Dockerfile
+│   ├── .dockerignore           # Excludes node_modules/ and dist/ from Docker build
 │   ├── nginx.conf             # Serves dist/, proxies /api/* to backend
 │   ├── package.json
 │   ├── vite.config.js
 │   ├── index.html
 │   └── src/
 │       ├── main.js
-│       ├── App.vue            # Main layout, SSE handler, disclaimer
+│       ├── App.vue            # Main layout, SSE handler, filters, disclaimer
 │       └── components/
 │           ├── ScanButton.vue    # Scan trigger + progress bar
+│           ├── FilterBar.vue     # Max price, rating, 52W range filters
 │           └── ResultsTable.vue  # Results table with prices, targets, ratings
-└── logs/                      # (gitignored) created at runtime
+└── logs/                      # (gitignored) auto-cleared each scan
     ├── scanner.log            # General app logs (rotating, 5MB)
     └── external_requests.log  # Per-request audit log (JSON-lines, 10MB)
 ```
@@ -145,6 +166,7 @@ stock-scanner/
 - **`logs/external_requests.log`** — JSON-lines audit of every external HTTP request with timestamp, source, URL, status code, latency, and success/failure
 - **`logs/scanner.log`** — General application log (rotating, 5MB max, 3 backups)
 - **SSE summary event** — Per-source request summary sent to frontend at scan completion
+- **Auto-cleanup** — Log files are automatically deleted at the start of each new scan
 
 ## .gitignore
 
