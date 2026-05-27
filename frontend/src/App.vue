@@ -172,7 +172,7 @@ body {
 }
 
 #app {
-  max-width: 1200px;
+  max-width: 1600px;
   margin: 0 auto;
   padding: 2rem;
   min-height: 100vh;
