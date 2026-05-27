@@ -27,7 +27,7 @@ logger = get_logger(__name__)
 BATCH_SIZE = 50
 PRICE_PERIOD = "3mo"
 TOP_CANDIDATES = 200
-FINAL_TOP_N = 10
+MAX_RESULTS = 50
 
 
 async def run_scan() -> AsyncGenerator[dict, None]:
@@ -130,7 +130,7 @@ async def run_scan() -> AsyncGenerator[dict, None]:
 
         await asyncio.sleep(random.uniform(0.3, 0.7))
 
-    # --- Phase 4: Build top 10 results ---
+    # --- Phase 4: Build results (up to MAX_RESULTS with valid price data) ---
     yield _progress(96, "Computing final rankings...")
 
     final_sorted = sorted(
@@ -138,21 +138,26 @@ async def run_scan() -> AsyncGenerator[dict, None]:
         key=lambda t: all_scores[t].get("composite", 0),
         reverse=True,
     )
-    top10 = final_sorted[:FINAL_TOP_N]
 
     results = []
-    for rank, ticker in enumerate(top10, 1):
+    for ticker in final_sorted:
+        if len(results) >= MAX_RESULTS:
+            break
+
         s = all_scores[ticker]
         info = await asyncio.to_thread(_get_ticker_info, ticker)
 
         current_price = info.get("currentPrice") or info.get("regularMarketPrice")
+        if current_price is None:
+            continue
+
         target_price = info.get("targetMeanPrice")
         upside_pct = None
         if target_price and current_price:
             upside_pct = round(((target_price / current_price) - 1) * 100, 1)
 
         results.append({
-            "rank": rank,
+            "rank": len(results) + 1,
             "ticker": ticker,
             "company": info.get("shortName", ticker),
             "sector": info.get("sector", "N/A"),
@@ -172,6 +177,8 @@ async def run_scan() -> AsyncGenerator[dict, None]:
             "num_analysts": info.get("numberOfAnalystOpinions", 0),
             "notes": _build_notes(s, info),
         })
+
+    logger.info(f"Built {len(results)} results from {len(final_sorted)} candidates")
 
     # Log scan summary
     summary = tracker.get_summary()

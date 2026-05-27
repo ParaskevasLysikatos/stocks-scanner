@@ -40,9 +40,22 @@ Then open **http://localhost** in your browser.
 
 1. Click **"Scan Market"**
 2. Wait 10–15 minutes (the scanner processes ~2,700 tickers sequentially to avoid rate limiting)
-3. View the top 10 results table with scores, prices, targets, and ratings
+3. View the filtered results table with scores, prices, targets, and ratings
+4. Adjust filters to narrow or broaden results (no re-scan needed)
 
 **Recommended usage:** Once daily, before US market open (09:30 ET).
+
+## Filters
+
+The results are filtered client-side with these defaults (adjustable after scan):
+
+| Filter | Default | Description |
+|--------|---------|-------------|
+| Max Price | $500 | Only show stocks priced below this threshold |
+| Analyst Rating | Strong Buy, Buy | Only show stocks with green analyst ratings |
+| 52W Lower Half | On | Only show stocks trading in the lower half of their 52-week range |
+
+The backend sends up to 50 top-scoring results. Filters are applied instantly in the browser — change any filter and the table updates immediately without re-scanning.
 
 ## Results Table Columns
 

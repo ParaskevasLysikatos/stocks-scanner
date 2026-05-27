@@ -1,6 +1,6 @@
 <template>
   <div class="results-section">
-    <h2 class="results-title">Top 10 Speculative Picks</h2>
+    <h2 class="results-title">Top {{ results.length }} Speculative Picks</h2>
     <div class="table-wrapper">
       <table class="results-table">
         <thead>

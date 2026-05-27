@@ -13,10 +13,20 @@
         @start-scan="startScan"
       />
 
-      <ResultsTable
-        v-if="results.length > 0"
-        :results="results"
+      <FilterBar
+        v-if="rawResults.length > 0"
+        :filters="filters"
+        @update:filters="filters = $event"
       />
+
+      <ResultsTable
+        v-if="filteredResults.length > 0"
+        :results="filteredResults"
+      />
+
+      <div v-if="rawResults.length > 0 && filteredResults.length === 0" class="no-results">
+        No stocks match the current filters. Try adjusting the criteria above.
+      </div>
 
       <div v-if="error" class="error-banner">
         {{ error }}
@@ -35,21 +45,44 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import ScanButton from './components/ScanButton.vue'
+import FilterBar from './components/FilterBar.vue'
 import ResultsTable from './components/ResultsTable.vue'
 
 const isScanning = ref(false)
 const progress = ref(0)
 const progressMessage = ref('')
-const results = ref([])
+const rawResults = ref([])
 const error = ref('')
+
+const filters = ref({
+  maxPrice: 500,
+  ratings: ['strong_buy', 'buy'],
+  lowerHalfOnly: true,
+})
+
+const filteredResults = computed(() => {
+  return rawResults.value.filter(stock => {
+    if (stock.current_price != null && stock.current_price >= filters.value.maxPrice) {
+      return false
+    }
+    if (filters.value.ratings.length > 0 && !filters.value.ratings.includes(stock.recommendation)) {
+      return false
+    }
+    if (filters.value.lowerHalfOnly && stock.week52_low && stock.week52_high && stock.current_price) {
+      const mid = (stock.week52_low + stock.week52_high) / 2
+      if (stock.current_price > mid) return false
+    }
+    return true
+  }).map((stock, idx) => ({ ...stock, rank: idx + 1 }))
+})
 
 async function startScan() {
   isScanning.value = true
   progress.value = 0
   progressMessage.value = 'Initializing scan...'
-  results.value = []
+  rawResults.value = []
   error.value = ''
 
   try {
@@ -106,7 +139,7 @@ function handleEvent(type, dataStr) {
       progress.value = data.percent
       progressMessage.value = data.message
     } else if (type === 'result') {
-      results.value = data.stocks
+      rawResults.value = data.stocks
     } else if (type === 'error') {
       error.value = data.message
     }
@@ -165,6 +198,16 @@ body {
 
 .main {
   flex: 1;
+}
+
+.no-results {
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 2rem;
+  font-size: 0.95rem;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  margin-top: 1rem;
 }
 
 .error-banner {
