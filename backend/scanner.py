@@ -7,7 +7,9 @@ Orchestrates the full scan pipeline:
 5. Compute composite scores, return top 10
 """
 import asyncio
+import glob
 import json
+import os
 import random
 from typing import AsyncGenerator, Any
 
@@ -39,8 +41,9 @@ async def run_scan() -> AsyncGenerator[dict, None]:
       {"event": "result",   "data": json_str}
       {"event": "error",    "data": json_str}
     """
-    # Reset request tracker for this scan
+    # Reset request tracker and clear old log files
     tracker.reset()
+    _clear_logs()
 
     # --- Phase 0: Fetch universe ---
     yield _progress(0, "Fetching ticker universe...")
@@ -254,6 +257,17 @@ def _build_notes(scores: dict, info: dict) -> str:
         notes.append("Analyst Buy")
 
     return "; ".join(notes) if notes else "Moderate signals"
+
+
+def _clear_logs():
+    """Remove old log files before a new scan."""
+    log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+    for f in glob.glob(os.path.join(log_dir, "*.log*")):
+        try:
+            os.remove(f)
+        except OSError:
+            pass
+    logger.info("Cleared old log files")
 
 
 def _progress(percent: int, message: str) -> dict:
