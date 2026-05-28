@@ -64,7 +64,19 @@ Then open **http://localhost** in your browser.
 
 Old log files are automatically cleared at the start of each new scan.
 
-## Filters
+## Custom Ticker Scanner
+
+Below the main results table, there's a **Custom Ticker Scanner** section for analyzing specific stocks:
+
+1. Type a ticker symbol and press **Enter** or **comma** to add it as a chip (up to 10)
+2. Click the **X** on any chip to remove it
+3. Click **"Scan Selected"** — results appear in ~30–60 seconds
+4. Results use the same table format (scores, prices, targets, ratings)
+5. Invalid or delisted tickers are silently skipped (no row appears)
+
+No filters are applied — you chose specific stocks, so all valid results are shown.
+
+## Filters (Main Scanner Only)
 
 The results are filtered client-side with these defaults (adjustable after scan):
 
@@ -136,6 +148,7 @@ stock-scanner/
 │       └── components/
 │           ├── ScanButton.vue    # Scan trigger + progress bar
 │           ├── FilterBar.vue     # Max price, rating, 52W range filters
+│           ├── CustomScanSection.vue # Custom ticker scanner (chip input, up to 10)
 │           └── ResultsTable.vue  # Results table with prices, targets, ratings
 └── logs/                      # (gitignored) auto-cleared each scan
     ├── scanner.log            # General app logs (rotating, 5MB)
@@ -157,6 +170,7 @@ stock-scanner/
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/scan` | POST | Start a full market scan (returns SSE stream) |
+| `/api/scan/custom` | POST | Scan specific tickers (body: `{"tickers": ["AAPL","TSLA"]}`, max 10, returns SSE stream) |
 | `/api/health` | GET | Health check |
 | `/api/logs` | GET | Per-source request stats + recent failures |
 

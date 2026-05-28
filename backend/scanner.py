@@ -270,6 +270,94 @@ def _clear_logs():
     logger.info("Cleared old log files")
 
 
+async def run_custom_scan(tickers: list[str]) -> AsyncGenerator[dict, None]:
+    """
+    Scan a specific list of tickers (up to 10).
+    Simplified pipeline: download → score all signals → build results.
+    """
+    yield _progress(0, f"Downloading data for {len(tickers)} tickers...")
+
+    try:
+        batch_data = await asyncio.to_thread(_download_batch, tickers)
+    except Exception as e:
+        logger.error(f"Custom scan download failed: {e}")
+        yield {"event": "error", "data": json.dumps({"message": f"Download failed: {e}"})}
+        return
+
+    yield _progress(10, "Scoring tickers...")
+
+    scored = []
+    for i, ticker in enumerate(tickers):
+        pct = 10 + int((i / len(tickers)) * 75)
+        yield _progress(pct, f"Analyzing {ticker} ({i + 1}/{len(tickers)})...")
+
+        try:
+            df = _extract_ticker_df(batch_data, ticker)
+            if df is None or len(df) < 50:
+                logger.debug(f"Custom scan: skipping {ticker} (insufficient data)")
+                continue
+
+            tech_score = compute_technical_score(df)
+            vol_score = compute_volume_score(df)
+            sent_score = await asyncio.to_thread(compute_sentiment_score, ticker)
+            fund_score = await asyncio.to_thread(compute_fundamentals_score, ticker)
+
+            composite = (
+                tech_score * 0.35
+                + vol_score * 0.25
+                + sent_score * 0.25
+                + fund_score * 0.15
+            ) * 100
+
+            info = await asyncio.to_thread(_get_ticker_info, ticker)
+            current_price = info.get("currentPrice") or info.get("regularMarketPrice")
+            if current_price is None:
+                continue
+
+            target_price = info.get("targetMeanPrice")
+            upside_pct = None
+            if target_price and current_price:
+                upside_pct = round(((target_price / current_price) - 1) * 100, 1)
+
+            scored.append({
+                "ticker": ticker,
+                "company": info.get("shortName", ticker),
+                "sector": info.get("sector", "N/A"),
+                "score": round(composite, 1),
+                "technical_score": round(tech_score * 35, 1),
+                "volume_score": round(vol_score * 25, 1),
+                "sentiment_score": round(sent_score * 25, 1),
+                "fundamentals_score": round(fund_score * 15, 1),
+                "current_price": current_price,
+                "target_price": target_price,
+                "target_low": info.get("targetLowPrice"),
+                "target_high": info.get("targetHighPrice"),
+                "week52_low": info.get("fiftyTwoWeekLow"),
+                "week52_high": info.get("fiftyTwoWeekHigh"),
+                "upside_pct": upside_pct,
+                "recommendation": info.get("recommendationKey", "N/A"),
+                "num_analysts": info.get("numberOfAnalystOpinions", 0),
+                "notes": _build_notes(
+                    {"technical": tech_score, "volume": vol_score,
+                     "sentiment": sent_score, "fundamentals": fund_score},
+                    info,
+                ),
+            })
+        except Exception as e:
+            logger.debug(f"Custom scan: failed for {ticker}: {e}")
+            continue
+
+    # Sort by score and assign ranks
+    scored.sort(key=lambda s: s["score"], reverse=True)
+    for rank, stock in enumerate(scored, 1):
+        stock["rank"] = rank
+
+    logger.info(f"Custom scan complete: {len(scored)}/{len(tickers)} tickers scored")
+
+    yield _progress(100, "Scan complete!")
+    yield {"event": "result", "data": json.dumps({"stocks": scored})}
+
+
 def _progress(percent: int, message: str) -> dict:
     return {
         "event": "progress",

@@ -5,11 +5,12 @@ FastAPI app with endpoints:
   GET  /api/logs   — request tracker summary stats
 """
 from fastapi import FastAPI, Request
+from pydantic import BaseModel, field_validator
 from sse_starlette.sse import EventSourceResponse
 
 from logger import get_logger
 from request_tracker import tracker
-from scanner import run_scan
+from scanner import run_scan, run_custom_scan
 
 logger = get_logger(__name__)
 
@@ -37,6 +38,39 @@ async def scan(request: Request):
                 yield event
         except Exception as e:
             logger.exception("Scan failed")
+            yield {"event": "error", "data": f'{{"message": "{e}"}}'}
+
+    return EventSourceResponse(event_generator())
+
+
+class CustomScanRequest(BaseModel):
+    tickers: list[str]
+
+    @field_validator("tickers")
+    @classmethod
+    def validate_tickers(cls, v):
+        v = [t.strip().upper() for t in v if t.strip()]
+        if len(v) > 10:
+            raise ValueError("Maximum 10 tickers allowed")
+        if len(v) == 0:
+            raise ValueError("At least 1 ticker required")
+        return v
+
+
+@app.post("/api/scan/custom")
+async def custom_scan(request: Request, body: CustomScanRequest):
+    """Scan specific tickers. Returns an SSE stream."""
+    logger.info(f"Custom scan requested for {body.tickers}")
+
+    async def event_generator():
+        try:
+            async for event in run_custom_scan(body.tickers):
+                if await request.is_disconnected():
+                    logger.info("Client disconnected, stopping custom scan")
+                    break
+                yield event
+        except Exception as e:
+            logger.exception("Custom scan failed")
             yield {"event": "error", "data": f'{{"message": "{e}"}}'}
 
     return EventSourceResponse(event_generator())

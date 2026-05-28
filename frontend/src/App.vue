@@ -28,6 +28,8 @@
         No stocks match the current filters. Try adjusting the criteria above.
       </div>
 
+      <CustomScanSection />
+
       <div v-if="error" class="error-banner">
         {{ error }}
       </div>
@@ -49,6 +51,7 @@ import { ref, computed } from 'vue'
 import ScanButton from './components/ScanButton.vue'
 import FilterBar from './components/FilterBar.vue'
 import ResultsTable from './components/ResultsTable.vue'
+import CustomScanSection from './components/CustomScanSection.vue'
 
 const isScanning = ref(false)
 const progress = ref(0)
